@@ -1,3 +1,13 @@
+"""
+Schryzon/Jayananda
+RVDiA (Revolutionary Virtual Dialog Assistant)
+Feel free to modify and do other stuff.
+Contributions are welcome.
+Licensed under the MIT LICENSE.
+
+UNRAM, please accept me!!! >_<
+"""
+
 import logging
 
 from app import create_app
