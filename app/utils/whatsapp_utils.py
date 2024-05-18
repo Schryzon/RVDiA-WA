@@ -4,6 +4,7 @@ import json
 import requests
 from openai import OpenAI
 import os
+import threading
 from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
@@ -78,6 +79,39 @@ def send_message(data):
         # Process the response as normal
         log_http_response(response)
         return response
+
+"""
+# Failed threading attempt
+def send_message(data):
+    def send_message_thread(data):
+        with current_app.app_context():
+            headers = {
+                "Content-type": "application/json",
+                "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
+            }
+
+            url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
+
+            try:
+                response = requests.post(
+                    url, data=data, headers=headers, timeout=10
+                )  # 10 seconds timeout as an example
+                response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+            except requests.Timeout:
+                logging.error("Timeout occurred while sending message")
+                return jsonify({"status": "error", "message": "Request timed out"}), 408
+            except (
+                requests.RequestException
+            ) as e:  # This will catch any general request exception
+                logging.error(f"Request failed due to: {e}")
+                return jsonify({"status": "error", "message": "Failed to send message"}), 500
+            else:
+                # Process the response as normal
+                log_http_response(response)
+                return response
+
+    thread = threading.Thread(target=send_message_thread, args=(data,))
+    thread.start()"""
 
 
 def process_text_for_whatsapp(text):
