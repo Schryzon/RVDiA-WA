@@ -5,6 +5,7 @@ import requests
 from openai import OpenAI
 import os
 import threading
+from .command import check_command, prefixes, execute_command
 from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
@@ -32,8 +33,18 @@ def get_text_message_input(recipient, text):
     )
 
 
-def generate_response(response, user_name):
-    # Return text in uppercase
+def generate_response(response:str, user_name):
+    """
+    Generate a response to the user
+    If a command prefix is detected, it runs a command
+    Else, it will initiate a convo with the AI
+    """
+    command = check_command(response)
+    if command:
+        args = command[1][2]
+        return execute_command(command[1][1], *command[1][2]) if args else execute_command(command[1][1])
+        # return f"Command detected! {command[0], command[1][0], command[1][1], command[1][2]}"
+
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     AIClient = OpenAI(
         api_key=OPENAI_API_KEY
