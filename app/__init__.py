@@ -1,10 +1,10 @@
-from flask import Flask
+from quart import Quart
 from app.config import load_configurations, configure_logging
 from .views import webhook_blueprint
 
 
 def create_app():
-    app = Flask(__name__)
+    app = Quart(__name__)
 
     # Load configurations and logging settings
     load_configurations(app)

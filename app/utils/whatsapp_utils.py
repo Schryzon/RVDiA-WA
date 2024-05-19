@@ -1,16 +1,22 @@
 import logging
-from flask import current_app, jsonify
+from quart import current_app, jsonify
 import json
 import requests
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+from .command import check_command, prefixes, execute_command
+import aiohttp
+import asyncio
 load_dotenv()
 
 # from app.services.openai_service import generate_response
 import re
 
+"""
+#UbahKeAsync
+"""
 
 
 def log_http_response(response):
@@ -31,17 +37,27 @@ def get_text_message_input(recipient, text):
     )
 
 
-def generate_response(response, user_name):
-    # Return text in uppercase
+async def generate_response(response, user_name):
+    """
+    Generate a response to the user
+    If a command prefix is detected, it runs a command
+    Else, it will initiate a convo with the AI
+    """
+    command = check_command(response)
+    if command:
+        args = command[1][2]
+        return await execute_command(command[1][1], *command[1][2]) if args else execute_command(command[1][1])
+        # return f"Command detected! {command[0], command[1][0], command[1][1], command[1][2]}"
+
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    AIClient = OpenAI(
+    AIClient = AsyncOpenAI(
         api_key=OPENAI_API_KEY
     )
     ROLE = os.getenv("rolesys")
     currentTime = datetime.now()
     date = currentTime.strftime("%d/%m/%Y")
     hour = currentTime.strftime("%H:%M:%S")
-    result = AIClient.chat.completions.create(
+    result = await AIClient.chat.completions.create(
         model="gpt-3.5-turbo",
         temperature=1.2,
         messages=[
@@ -53,31 +69,27 @@ def generate_response(response, user_name):
     return result.choices[0].message.content
 
 
-def send_message(data):
+async def send_message(data):
     headers = {
         "Content-type": "application/json",
         "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
     }
 
-    url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
+    async with aiohttp.ClientSession() as session:
+        url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
+        try:
+            async with session.post(url, data=data, headers=headers) as response:
+                if response.status == 200:
+                    print("Status:", response.status)
+                    print("Content-type:", response.headers["content-type"])
 
-    try:
-        response = requests.post(
-            url, data=data, headers=headers, timeout=10
-        )  # 10 seconds timeout as an example
-        response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
-    except requests.Timeout:
-        logging.error("Timeout occurred while sending message")
-        return jsonify({"status": "error", "message": "Request timed out"}), 408
-    except (
-        requests.RequestException
-    ) as e:  # This will catch any general request exception
-        logging.error(f"Request failed due to: {e}")
-        return jsonify({"status": "error", "message": "Failed to send message"}), 500
-    else:
-        # Process the response as normal
-        log_http_response(response)
-        return response
+                    html = await response.text()
+                    print("Body:", html)
+                else:
+                    print(response.status)
+                    print(response)
+        except aiohttp.ClientConnectorError as e:
+            print("Connection Error", str(e))
 
 
 def process_text_for_whatsapp(text):
@@ -98,7 +110,8 @@ def process_text_for_whatsapp(text):
     return whatsapp_style_text
 
 
-def process_whatsapp_message(body):
+async def process_whatsapp_message(body):
+    print(body)
     wa_id = body["entry"][0]["changes"][0]["value"]["contacts"][0]["wa_id"]
     name = body["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
 
@@ -106,7 +119,7 @@ def process_whatsapp_message(body):
     message_body = message["text"]["body"]
 
     # TODO: implement custom function here
-    response = generate_response(message_body, name)
+    response = await generate_response(message_body, name)
 
     # OpenAI Integration
     # response = generate_response(message_body, wa_id, name)
@@ -114,7 +127,7 @@ def process_whatsapp_message(body):
 
     #data = get_text_message_input(current_app.config["RECIPIENT_WAID"], response)
     data = get_text_message_input(wa_id, response)
-    send_message(data)
+    return await send_message(data)
 
 
 def is_valid_whatsapp_message(body):
