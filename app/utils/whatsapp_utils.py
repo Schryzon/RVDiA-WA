@@ -4,6 +4,8 @@ import json
 import requests
 from openai import OpenAI, AsyncOpenAI
 import os
+import threading
+from .command import check_command, prefixes, execute_command
 from datetime import datetime
 from dotenv import load_dotenv
 from .command import check_command, prefixes, execute_command
