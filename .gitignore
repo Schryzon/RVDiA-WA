@@ -29,6 +29,8 @@ img/
 docs/
 utils/README.md
 ngrok.exe
+saved_items/images/
+Image.png
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

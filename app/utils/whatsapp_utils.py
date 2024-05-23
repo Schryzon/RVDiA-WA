@@ -9,8 +9,16 @@ from dotenv import load_dotenv
 from .command import check_command, prefixes, execute_command
 import aiohttp
 import asyncio
+from .scripts import upload_media
+from pathlib import Path
+from contextlib import suppress
+import mimetypes
 load_dotenv()
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+AIClient = AsyncOpenAI(
+        api_key=OPENAI_API_KEY
+    )
 # from app.services.openai_service import generate_response
 import re
 
@@ -25,34 +33,44 @@ def log_http_response(response):
     logging.info(f"Body: {response.text}")
 
 
-def get_text_message_input(recipient, text):
-    return json.dumps(
-        {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "text",
-            "text": {"preview_url": False, "body": text},
-        }
-    )
+def get_message_input(recipient, text, type, image_id = None, command_name = None):
+    if type == "text" and not command_name == 'generate':
+        return json.dumps(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": recipient,
+                "type": "text",
+                "text": {"preview_url": False, "body": text},
+            }
+        )
+    
+    else:
+        return json.dumps(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": recipient,
+                "type": "IMAGE",
+                "image": {"id": image_id, "caption":text},
+            }
+        )
 
 
-async def generate_response(response, user_name):
+async def generate_response(response, user_name, image_path):
     """
     Generate a response to the user
     If a command prefix is detected, it runs a command
     Else, it will initiate a convo with the AI
     """
+    if response is None:
+        return "Apa itu? Gambar, video, atau sticker kah?\nMohon maaf ya, aku belum bisa membacanya!"
     command = check_command(response)
     if command:
         args = command[1][2]
-        return await execute_command(command[1][1], *command[1][2]) if args else execute_command(command[1][1])
+        return await execute_command(command[1][1], *command[1][2]) if args else await execute_command(command[1][1])
         # return f"Command detected! {command[0], command[1][0], command[1][1], command[1][2]}"
 
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    AIClient = AsyncOpenAI(
-        api_key=OPENAI_API_KEY
-    )
     ROLE = os.getenv("rolesys")
     currentTime = datetime.now()
     date = currentTime.strftime("%d/%m/%Y")
@@ -111,22 +129,123 @@ def process_text_for_whatsapp(text):
 
 
 async def process_whatsapp_message(body):
-    print(body)
+    """
+    Body Format Example
+
+    {
+    "object": "whatsapp_business_account",
+    "entry": [
+        {
+        "id": "XXXX",
+        "changes": [
+            {
+            "value": {
+                "messaging_product": "whatsapp",
+                "metadata": {
+                "display_phone_number": "XXXXXXX",
+                "phone_number_id": "XXXXXXX"
+                },
+                "contacts": [
+                {
+                    "profile": {
+                    "name": "XXXX"
+                    },
+                    "wa_id": "XXXX"
+                }
+                ],
+                "messages": [
+                {
+                    "from": "XXXX",
+                    "id": "XXXXXX",
+                    "timestamp": "XXXXXXXXXX",
+                    "type": "image",
+                    "image": {
+                    "caption": "XXXXXXXXXXXXX",
+                    "mime_type": "image/jpeg",
+                    "sha256": "XXXXXX",
+                    "id": "XXXXXX"
+                    }
+                }
+                ]
+            },
+            "field": "messages"
+            }
+        ]
+        }
+    ]
+}
+    """
+
     wa_id = body["entry"][0]["changes"][0]["value"]["contacts"][0]["wa_id"]
     name = body["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
 
     message = body["entry"][0]["changes"][0]["value"]["messages"][0]
-    message_body = message["text"]["body"]
+    message_type = message["type"]
+    match message_type:
+        case "text":
+            message_body = message["text"]["body"]
+            image_path = False
+        case "image":
+            headers = {
+                "Content-type": "application/json",
+                "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
+            }
+
+            async with aiohttp.ClientSession(headers=headers) as session:
+                url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{message['image']['id']}/"
+                response = await session.get(url)
+                response_json = await response.json()
+
+            image_url = response_json['url']
+            headers_2 = {
+                "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
+                "User-Agent": "curl/7.64.1"
+            }
+            async with aiohttp.ClientSession(headers=headers_2) as session:
+                data = await session.request(method="GET", url=image_url, ssl=False)
+                print(f"Obtained data: {data}")
+                content_type = data.headers.get('Content-Type')
+                if content_type:
+                    ext = mimetypes.guess_extension(content_type.split(';')[0])
+                    if ext is None:
+                        logging.warning("Could not determine file extension, defaulting to .jpg")
+                        ext = ".jpg"
+                else:
+                    logging.warning("No Content-Type header found, defaulting to .jpg")
+                    ext = ".jpg"
+
+                image_path = os.path.join('./saved_items/images', f"Image{ext}")
+                with open(image_path, "wb") as file:
+                    file.write(await data.read())
+                logging.warning(f"Saved an image to {image_path}")
+
+            try:
+                if message['image']['caption']:
+                    message_body = message['image']['caption'] or None
+            except:
+                message_body = None
 
     # TODO: implement custom function here
-    response = await generate_response(message_body, name)
+    response = await generate_response(message_body, name, image_path)
+    with suppress():
+        command = check_command(message_body)
+        try:
+            command_name = command[1][1]
+            if message_type == 'image' or command_name == 'generate':
+                print(f"Response: {response}")
+                media_data = await upload_media(response[1])
+                data = get_message_input(wa_id, response[0], message_type, image_id=media_data, command_name=command_name)
+                os.remove(response[1])
+            else:    
+                data = get_message_input(wa_id, response, message_type)
+        except:
+            data = get_message_input(wa_id, response, message_type)
 
     # OpenAI Integration
     # response = generate_response(message_body, wa_id, name)
     # response = process_text_for_whatsapp(response)
 
-    #data = get_text_message_input(current_app.config["RECIPIENT_WAID"], response)
-    data = get_text_message_input(wa_id, response)
+    #data = get_message_input(current_app.config["RECIPIENT_WAID"], response)
     return await send_message(data)
 
 
