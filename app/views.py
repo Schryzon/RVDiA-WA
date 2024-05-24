@@ -1,6 +1,6 @@
 import logging
 import json
-
+from datetime import datetime, timezone
 from quart import Blueprint, request, jsonify, current_app
 
 from .decorators.security import signature_required
@@ -44,8 +44,14 @@ async def handle_message():
 
     try:
         if is_valid_whatsapp_message(body):
-            await process_whatsapp_message(body)
-            return jsonify({"status": "ok"}), 200
+            message_timestamp = float(body['entry'][0]['changes'][0]['value']['messages'][0]['timestamp'])
+            current_timestamp = datetime.now(timezone.utc).timestamp()
+            if current_timestamp - message_timestamp <= 180:
+                await process_whatsapp_message(body)
+                return jsonify({"status": "ok"}), 200
+            else:
+                # Not running anything, as it has been more than 3 minutes
+                return jsonify({"status": "ok"}), 200
         else:
             # if the request is not a WhatsApp API event, return an error
             return (

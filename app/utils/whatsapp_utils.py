@@ -1,16 +1,13 @@
 import logging
 from quart import current_app, jsonify
 import json
-import requests
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 import os
 from datetime import datetime
 from dotenv import load_dotenv
 from .command import check_command, prefixes, execute_command
 import aiohttp
-import asyncio
 from .scripts import upload_media
-from pathlib import Path
 from contextlib import suppress
 import mimetypes
 load_dotenv()
@@ -68,7 +65,10 @@ async def generate_response(response, user_name, image_path):
     command = check_command(response)
     if command:
         args = command[1][2]
-        return await execute_command(command[1][1], *command[1][2]) if args else await execute_command(command[1][1])
+        try:
+            return await execute_command(command[1][1], *command[1][2]) if args else await execute_command(command[1][1])
+        except Exception as e:
+            return f"Wow! Command ini mengalami error!\nDetail error: {e}\nTolong laporkan ke Jayananda segera, ya!"
         # return f"Command detected! {command[0], command[1][0], command[1][1], command[1][2]}"
 
     ROLE = os.getenv("rolesys")

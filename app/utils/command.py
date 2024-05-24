@@ -55,7 +55,7 @@ async def execute_command(command_name:str, *args):
             else:
                 return func(*args)
         except Exception as e:
-            return e
+            return f"Wow! Command ini mengalami error!\nDetail error: {e}\nTolong laporkan ke Jayananda segera, ya!"
     else:
         return f"No command called {command_name} found."
     
