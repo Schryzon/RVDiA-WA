@@ -1,11 +1,12 @@
 import logging
 from quart import current_app, jsonify
 import json
+import openai
 from openai import AsyncOpenAI
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-from .command import check_command, prefixes, execute_command
+from .command_handler import check_command, prefixes, execute_command
 import aiohttp
 from .scripts import upload_media
 from contextlib import suppress
@@ -60,8 +61,8 @@ async def generate_response(response, user_name, image_path):
     If a command prefix is detected, it runs a command
     Else, it will initiate a convo with the AI
     """
-    if response is None:
-        return "Apa itu? Gambar, video, atau sticker kah?\nMohon maaf ya, aku belum bisa membacanya!"
+    if response is None and image_path:
+        return "Itu gambar apa yah?\nMohon maaf, aku masih belum bisa menganalisis foto secara langsung! >_<"
     command = check_command(response)
     if command:
         args = command[1][2]
@@ -75,16 +76,26 @@ async def generate_response(response, user_name, image_path):
     currentTime = datetime.now()
     date = currentTime.strftime("%d/%m/%Y")
     hour = currentTime.strftime("%H:%M:%S")
-    result = await AIClient.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature=1.2,
-        messages=[
-        {"role":'system', 'content':ROLE + f" You are currently chatting with {user_name}."},
-        {"role":'assistant', 'content':f"The current date is {date} at {hour} UTC+8"},
-        {"role": "user", "content": response}
-        ]
-    )
-    return result.choices[0].message.content
+    try:
+        result = await AIClient.chat.completions.create(
+            model="gpt-3.5-turbo",
+            temperature=1.2,
+            messages=[
+            {"role":'system', 'content':ROLE + f" You are currently chatting with {user_name}."},
+            {"role":'assistant', 'content':f"The current date is {date} at {hour} UTC+8"},
+            {"role": "user", "content": response}
+            ]
+        )
+        return result.choices[0].message.content
+    
+    except openai.RateLimitError:
+        return f"Waaaaah! Otakku sedang kepanasan!\nTolong berikan aku waktu istirahat sejenak, ya!"
+    except openai.APITimeoutError:
+        return f"Hmmm...\nKoneksiku ke server sedang ada kendala. Coba hubungi Jayananda, ya!"
+    except openai.APIConnectionError:
+        return f"E-ehh... uhm... sepertinya ada kendala saat aku menghubungkan diri ke server."
+    except openai.InternalServerError:
+        return f"Mohon maaf, fungsi untuk membalas chatmu sedang dalam gangguan.\nCoba lagi nanti, ya!"
 
 
 async def send_message(data):
@@ -98,16 +109,16 @@ async def send_message(data):
         try:
             async with session.post(url, data=data, headers=headers) as response:
                 if response.status == 200:
-                    print("Status:", response.status)
-                    print("Content-type:", response.headers["content-type"])
+                    logging.info(f"Status: {response.status}")
+                    logging.info(f"Content-type: {response.headers['content-type']}")
 
                     html = await response.text()
-                    print("Body:", html)
+                    logging.info(f"Body: {html}")
                 else:
-                    print(response.status)
-                    print(response)
+                    logging.warning(response.status)
+                    logging.warning(response)
         except aiohttp.ClientConnectorError as e:
-            print("Connection Error", str(e))
+            logging.warning(f"Connection Error: {e}")
 
 
 def process_text_for_whatsapp(text):
@@ -129,6 +140,10 @@ def process_text_for_whatsapp(text):
 
 
 async def process_whatsapp_message(body):
+    """
+    Process obtained message object to be read by RV
+    """
+
     """
     Body Format Example
 
@@ -181,16 +196,20 @@ async def process_whatsapp_message(body):
 
     message = body["entry"][0]["changes"][0]["value"]["messages"][0]
     message_type = message["type"]
+
+    # Different message processing based on type
     match message_type:
         case "text":
             message_body = message["text"]["body"]
             image_path = False
+
         case "image":
             headers = {
                 "Content-type": "application/json",
                 "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
             }
 
+            # Get media URL
             async with aiohttp.ClientSession(headers=headers) as session:
                 url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{message['image']['id']}/"
                 response = await session.get(url)
@@ -201,6 +220,8 @@ async def process_whatsapp_message(body):
                 "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
                 "User-Agent": "curl/7.64.1"
             }
+
+            # Download media from URL (hardest part)
             async with aiohttp.ClientSession(headers=headers_2) as session:
                 data = await session.request(method="GET", url=image_url, ssl=False)
                 print(f"Obtained data: {data}")
@@ -225,9 +246,10 @@ async def process_whatsapp_message(body):
             except:
                 message_body = None
 
-    # TODO: implement custom function here
+    # Create a response accordingly!
     response = await generate_response(message_body, name, image_path)
-    with suppress():
+
+    with suppress(): # Doesn't seem to work, I used try-except blocks instead
         command = check_command(message_body)
         try:
             command_name = command[1][1]

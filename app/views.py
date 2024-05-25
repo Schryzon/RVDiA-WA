@@ -51,7 +51,7 @@ async def handle_message():
                 return jsonify({"status": "ok"}), 200
             else:
                 # Not running anything, as it has been more than 3 minutes
-                return jsonify({"status": "ok"}), 200
+                return logging.info("Ignoring detected old message.")
         else:
             # if the request is not a WhatsApp API event, return an error
             return (

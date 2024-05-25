@@ -3,8 +3,15 @@ A script file, similar to scripts.main from RVDiA
 """
 import aiohttp
 import logging
+import types
 import aiofiles
-from quart import current_app, jsonify
+import inspect
+from quart import current_app
+from command_cogs import (
+    general
+)
+
+categories = [general]
 
 def heading(direction:int):
         result =[]
@@ -44,10 +51,43 @@ async def upload_media(file_path):
                     if response.status == 200:
                         data = await response.json()
                         media_id = data.get('id')
-                        print("Media ID:", media_id)
                         return media_id
                     else:
-                        print("Status:", response.status)
-                        print("Response:", await response.text())
+                        logging.info(f"Status: {response.status}")
+                        logging.info(f"Response: {await response.text()}")
         except aiohttp.ClientConnectorError as e:
-            print("Connection Error:", str(e))
+            logging.warning(f"Connection Error: {e}")
+
+# For rvd help command
+blacklisted_functions = [
+    "crop_to_square",
+    "say",
+    "help",
+    "greet"
+    ]
+
+def get_all_commands(module: types.ModuleType):
+    """
+    Get all function names and their docstrings from the specified module.
+
+    Args:
+    module (module): The module to inspect.
+
+    Returns:
+    list of str: A list of strings, each containing a function name and its docstring.
+    """
+    functions_info = []
+    functions_info.append(f"Kategori: {module.__name__.title().replace('Command_Cogs.', '')}\n\n")
+    for name, func in inspect.getmembers(module, inspect.isfunction):
+        if func.__module__ == module.__name__ and not name in blacklisted_functions:  # Ensure it's a function from the module, not an imported one
+            docstring = inspect.getdoc(func) or "Belum ada deskripsi."
+            params = inspect.signature(func).parameters
+            param_list = [str(param) for param in params.values()] or ['Tidak ada']
+            functions_info.append(f"*rvd {name}*\n\"{docstring}\"\nParameter dibutuhkan: {', '.join(param_list)}\n")
+    return functions_info
+
+def process_help_command():
+    help_strings = []
+    for category in categories:
+        help_strings.extend(get_all_commands(category))
+    return help_strings
