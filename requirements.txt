@@ -6,3 +6,4 @@ quart
 requests
 flask[async]
 aiofiles
+pillow

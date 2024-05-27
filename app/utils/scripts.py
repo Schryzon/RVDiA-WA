@@ -77,7 +77,7 @@ def get_all_commands(module: types.ModuleType):
     list of str: A list of strings, each containing a function name and its docstring.
     """
     functions_info = []
-    functions_info.append(f"Kategori: {module.__name__.title().replace('Command_Cogs.', '')}\n\n")
+    functions_info.append(f"Kategori: {module.__name__.title().replace('Command_Cogs.', '')}\n")
     for name, func in inspect.getmembers(module, inspect.isfunction):
         if func.__module__ == module.__name__ and not name in blacklisted_functions:  # Ensure it's a function from the module, not an imported one
             docstring = inspect.getdoc(func) or "Belum ada deskripsi."

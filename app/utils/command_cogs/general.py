@@ -49,11 +49,11 @@ def say(*prompt):
     """
     return repeat(*prompt)
 
-async def cuaca(*location):
+async def cuaca(*lokasi):
     """
     Lihat info tentang keadaan cuaca di suatu kota atau daerah!
     """
-    full_location = ' '.join(location).strip()
+    full_location = ' '.join(lokasi).strip()
     try:
         async with aiohttp.ClientSession() as session:
             # Need to decode geocode consisting of latitude and longitude
@@ -120,6 +120,9 @@ async def generate(*prompt):
         return [f'Prompt: *{full_prompt}*\nWaktu dibutuhkan: *{round(required_time, 2)} detik*', './generated.png']
 
 async def variasi():
+    """
+    Ciptakan variasi dari sebuah foto! (Foto dibutuhkan)
+    """
     crop_to_square(f'./saved_items/images/Image.jpg')
 
     with Image.open("./saved_items/images/Image.jpg") as image:

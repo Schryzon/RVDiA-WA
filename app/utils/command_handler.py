@@ -6,7 +6,6 @@ import asyncio
 from dotenv import load_dotenv
 import os
 import sys
-import openai
 
 # Fixing module not found error
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +16,6 @@ prefixes = [
     "rvd ",
     "r!",
     "!",
-    "Rvd"
 ]
 
 def check_command(message_body:str):
@@ -26,7 +24,7 @@ def check_command(message_body:str):
     """
     for prefix in prefixes:
         prefix = prefix.lower()
-        if message_body.startswith(prefix):
+        if message_body.lower().startswith(prefix):
             message_without_prefix = message_body[len(prefix):].strip()
             # Split the message into parts
             parts = message_without_prefix.split()
@@ -52,4 +50,4 @@ async def execute_command(command_name:str, *args):
         except Exception as e:
             return f"Wow! Command ini mengalami error!\nDetail error: {e}\nTolong laporkan ke Jayananda segera, ya!"
     else:
-        return f"No command called {command_name} found."
+        return f"Aku tidak menemukan command *{command_name}*!\nSilahkan cek daftar command dengan *rvd help*."

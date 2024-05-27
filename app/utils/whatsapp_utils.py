@@ -56,6 +56,7 @@ def get_message_input(recipient, text, type, image_id = None, command_name = Non
 
 
 async def generate_response(response, user_name, image_path):
+    # TODO: Add saving threads and learning from chats.
     """
     Generate a response to the user
     If a command prefix is detected, it runs a command
