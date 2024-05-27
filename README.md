@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://repository-images.githubusercontent.com/800840462/a7ba65f3-82a1-4dd7-99c4-618600f5c789" width="65%" height="65%" align="center">
+  <img src="https://repository-images.githubusercontent.com/800840462/a7ba65f3-82a1-4dd7-99c4-618600f5c789" width="65%" height="65%" align="center" alt="RVDiA's Banner">
 </div>
 
 # RVDiA: WhatsApp Edition
