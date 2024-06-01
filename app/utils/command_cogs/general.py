@@ -1,5 +1,4 @@
 from os import getenv
-from scripts import heading
 from dotenv import load_dotenv
 from PIL import Image
 from time import time
@@ -49,38 +48,6 @@ def say(*prompt):
     """
     return repeat(*prompt)
 
-async def cuaca(*lokasi):
-    """
-    Lihat info tentang keadaan cuaca di suatu kota atau daerah!
-    """
-    full_location = ' '.join(lokasi).strip()
-    try:
-        async with aiohttp.ClientSession() as session:
-            # Need to decode geocode consisting of latitude and longitude
-            data = await session.get(f'http://api.openweathermap.org/geo/1.0/direct?q={full_location}&limit=1&appid={getenv("openweatherkey")}')
-            data = await data.json()
-            geocode = [data[0]['lat'], data[0]['lon']]
-            result = await session.get(f"https://api.openweathermap.org/data/2.5/weather?lat={geocode[0]}&lon={geocode[1]}&lang=id&units=metric&appid={getenv('openweatherkey')}")
-            result = await result.json()
-            #icon = f"http://openweathermap.org/img/wn/{result['weather'][0]['icon']}@4x.png"
-            title=f"Cuaca di {result['name']}"
-            description=f"_{result['weather'][0]['description'].title()}_\n"
-
-            temp = result['main']
-            suhu=f"Suhu ({temp['temp']}°C)"
-            feels_like = f"*Terasa seperti:* {temp['feels_like']}°C\n*Minimum:* {temp['temp_min']}°C\n*Maksimum:* {temp['temp_max']}°C"
-            atmo_press= f"*Tekanan Atmosfer:* {temp['pressure']} hPa\n*Kelembaban:* {temp['humidity']}%\n*Persentase Awan:* {result['clouds']['all']}%\n"
-
-            wind = result['wind']
-            angin = "Angin"
-            attr_angin = f"*Kecepatan:* {wind['speed']} m/s\n*Arah:* {wind['deg']}° ({heading(wind['deg'])})"
-            combined_strings = '\n'.join([title, description, suhu, feels_like, atmo_press, angin, attr_angin])
-            # A reminder to not leave a single comma at the end of each variable declarations
-            # I learned it the hard way, damn it
-            return combined_strings
-
-    except(IndexError):
-        return "Maaf, aku tidak bisa menemukan lokasi itu!"
     
 def crop_to_square(img_path):
     """

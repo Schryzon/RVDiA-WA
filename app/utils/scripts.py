@@ -8,10 +8,11 @@ import aiofiles
 import inspect
 from quart import current_app
 from command_cogs import (
-    general
+    general,
+    utility
 )
 
-categories = [general]
+categories = [general, utility]
 
 def heading(direction:int):
         result =[]
@@ -77,7 +78,7 @@ def get_all_commands(module: types.ModuleType):
     list of str: A list of strings, each containing a function name and its docstring.
     """
     functions_info = []
-    functions_info.append(f"Kategori: {module.__name__.title().replace('Command_Cogs.', '')}\n")
+    functions_info.append(f"-Kategori: {module.__name__.title().replace('Command_Cogs.', '')}-\n")
     for name, func in inspect.getmembers(module, inspect.isfunction):
         if func.__module__ == module.__name__ and not name in blacklisted_functions:  # Ensure it's a function from the module, not an imported one
             docstring = inspect.getdoc(func) or "Belum ada deskripsi."

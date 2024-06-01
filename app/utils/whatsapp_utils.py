@@ -31,8 +31,14 @@ def log_http_response(response):
     logging.info(f"Body: {response.text}")
 
 
+image_commands = [
+    'generate',
+    'hex',
+    'rgb'
+]
+
 def get_message_input(recipient, text, type, image_id = None, command_name = None):
-    if type == "text" and not command_name == 'generate':
+    if type == "text" and not command_name in image_commands:
         return json.dumps(
             {
                 "messaging_product": "whatsapp",
@@ -254,11 +260,12 @@ async def process_whatsapp_message(body):
         command = check_command(message_body)
         try:
             command_name = command[1][1]
-            if message_type == 'image' or command_name == 'generate':
+            if message_type == 'image' or command_name in image_commands:
                 print(f"Response: {response}")
                 media_data = await upload_media(response[1])
                 data = get_message_input(wa_id, response[0], message_type, image_id=media_data, command_name=command_name)
-                os.remove(response[1])
+                if not response[1] == "./saved_items/images/qmark.png": # It literally got deleted during debugging
+                    os.remove(response[1])
             else:    
                 data = get_message_input(wa_id, response, message_type)
         except:
