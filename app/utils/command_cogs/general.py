@@ -6,7 +6,6 @@ import aiohttp
 import os
 import base64
 from openai import AsyncOpenAI
-from scripts import process_help_command
 from quart import current_app
 load_dotenv()
 
@@ -118,6 +117,7 @@ def help():
     """
     Memperlihatkan pesan ini
     """
+    from scripts import process_help_command
     all_commands = '\n'.join(process_help_command())
     reply = f"*-- DAFTAR COMMAND RVDiA --*\n\n" + all_commands
     return reply

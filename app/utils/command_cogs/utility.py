@@ -3,12 +3,12 @@ import re
 import aiofiles
 from os import getenv
 from io import BytesIO
-import scripts
 
 async def cuaca(*lokasi):
     """
     Lihat info tentang keadaan cuaca di suatu kota atau daerah!
     """
+    from scripts import heading
     full_location = ' '.join(lokasi).strip()
     try:
         async with aiohttp.ClientSession() as session:
@@ -29,7 +29,7 @@ async def cuaca(*lokasi):
 
             wind = result['wind']
             angin = "Angin"
-            attr_angin = f"*Kecepatan:* {wind['speed']} m/s\n*Arah:* {wind['deg']}° ({scripts.heading(wind['deg'])})"
+            attr_angin = f"*Kecepatan:* {wind['speed']} m/s\n*Arah:* {wind['deg']}° ({heading(wind['deg'])})"
             combined_strings = '\n'.join([title, description, suhu, feels_like, atmo_press, angin, attr_angin])
             # A reminder to not leave a single comma at the end of each variable declarations
             # I learned it the hard way, damn it

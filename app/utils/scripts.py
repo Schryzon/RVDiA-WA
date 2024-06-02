@@ -9,10 +9,11 @@ import inspect
 from quart import current_app
 from command_cogs import (
     general,
-    utility
+    utility,
+    support
 )
 
-categories = [general, utility]
+categories = [general, utility, support]
 
 def heading(direction:int):
         result =[]

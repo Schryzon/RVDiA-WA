@@ -26,6 +26,7 @@ var/
 services/
 data/
 img/
+start/
 docs/
 utils/README.md
 ngrok.exe

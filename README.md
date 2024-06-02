@@ -18,7 +18,7 @@ or you can skip the hassle and [chat with her right away!](https://api.whatsapp.
 
 ## Wanna Collab?
 Unfortunately, I'm not open to direct contributions as of now.
-I might need it for waay bigger projects, I don't really think this qualifies as one.
+Though, suggestions and critics are welcome as I feel rusty when coding nowadays.
 
 ## Hosting
 Hosted using the same droplet as her twin sister does, in DigitalOcean.
@@ -32,6 +32,8 @@ In the command prompt, type in `git clone https://github.com/Schryzon/RVDiA-WA`
 and make sure all the modules in `requirements.txt` are installed
 
 `python -m pip install -r requirements.txt`
+
+Also, don't forget to check out `.env.example` on what you need to setup.
 
 ### Credits and Special Thanks
 This project uses a template from [This repository.](https://github.com/daveebbelaar/python-whatsapp-bot)

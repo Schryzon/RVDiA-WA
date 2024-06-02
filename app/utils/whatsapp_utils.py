@@ -45,7 +45,7 @@ def get_message_input(recipient, text, type, image_id = None, command_name = Non
                 "recipient_type": "individual",
                 "to": recipient,
                 "type": "text",
-                "text": {"preview_url": False, "body": text},
+                "text": {"preview_url": True, "body": text},
             }
         )
     
