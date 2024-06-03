@@ -6,12 +6,16 @@ import logging
 import types
 import aiofiles
 import inspect
+import os
 from quart import current_app
+from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 from command_cogs import (
     general,
     utility,
     support
 )
+load_dotenv()
 
 categories = [general, utility, support]
 
@@ -93,3 +97,14 @@ def process_help_command():
     for category in categories:
         help_strings.extend(get_all_commands(category))
     return help_strings
+
+async def connectdb(collection:str):
+    """
+    Returns data gained from database collection.
+    Format: WhatsApp.<collection>
+    Uses US region.
+    """
+    client = AsyncIOMotorClient(os.getenv('mongodburl'))
+    db = client.WhatsApp
+    coll = db[collection]
+    return coll

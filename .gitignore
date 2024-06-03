@@ -29,8 +29,8 @@ img/
 start/
 docs/
 utils/README.md
+utils/dummy.py
 ngrok.exe
-saved_items/images/
 Image.png
 
 # PyInstaller

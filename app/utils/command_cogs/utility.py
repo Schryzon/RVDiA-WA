@@ -81,3 +81,13 @@ async def rgb(*rgb_value):
         return ["Salah satu nilai dari warna RGB melebihi 255!\nPastikan nilai RGB valid!", "./saved_items/images/qmark.png"]
     hex_value = '{:02x}{:02x}{:02x}'.format(rgb_values[0], rgb_values[1], rgb_values[2])
     return await hex(hex_value) # Cheat
+
+async def reset(wa_id):
+    """Menghapus ingatanku atas chat yang telah berlalu."""
+    from scripts import connectdb
+    collection = await connectdb("Memory")
+    try:
+        await collection.find_one_and_delete({'_id':wa_id})
+        return f"Aku telah menghapus ingatanku!\nE-eh...? Kamu siapa?!"
+    except Exception as e:
+        return f"Hmm... aku tidak bisa menghapus ingatanku!\n{e}"

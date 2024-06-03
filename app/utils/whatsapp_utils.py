@@ -14,9 +14,13 @@ import mimetypes
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SECOND_AI_API_KEY = os.getenv("SECOND_AI_API_KEY")
 AIClient = AsyncOpenAI(
         api_key=OPENAI_API_KEY
     )
+AIClient2 = AsyncOpenAI(
+    api_key=SECOND_AI_API_KEY
+)
 # from app.services.openai_service import generate_response
 import re
 
@@ -59,9 +63,29 @@ def get_message_input(recipient, text, type, image_id = None, command_name = Non
                 "image": {"id": image_id, "caption":text},
             }
         )
+    
+
+async def summarize(chat_data, collection, user_name, wa_id, AI_response, response):
+    SUMMARIZER_ROLE = os.getenv("SUMMARIZER_ROLE")
+    SUMMARIZER_ASSIST = os.getenv("SUMMARIZER_ASSIST")
+    summarize = await AIClient.chat.completions.create(
+        model="gpt-3.5-turbo",
+        temperature=0, # Ensuring no dupes, or something?
+        messages=[
+        {"role":'system', 'content':SUMMARIZER_ROLE},
+        {"role":'assistant', 'content':SUMMARIZER_ASSIST},
+        {"role": "user", "content": f"{user_name}: {response}\nRVDiA: {AI_response}"}
+        ]
+    )
+    summarize_response = json.loads(summarize.choices[0].message.content)
+    
+    if not chat_data:
+        await collection.insert_one({"_id":wa_id, "memory":[summarize_response]})
+    else:
+        await collection.update_one({"_id":wa_id}, {"$push":{"memory":summarize_response}})
 
 
-async def generate_response(response, user_name, image_path):
+async def generate_response(response, user_name, image_path, wa_id):
     # TODO: Add saving threads and learning from chats.
     """
     Generate a response to the user
@@ -73,7 +97,10 @@ async def generate_response(response, user_name, image_path):
     command = check_command(response)
     if command:
         args = command[1][2]
+        name = command[1][1]
         try:
+            if name == "reset":
+                return await execute_command(name, wa_id)
             return await execute_command(command[1][1], *command[1][2]) if args else await execute_command(command[1][1])
         except Exception as e:
             return f"Wow! Command ini mengalami error!\nDetail error: {e}\nTolong laporkan ke Jayananda segera, ya!"
@@ -83,17 +110,26 @@ async def generate_response(response, user_name, image_path):
     currentTime = datetime.now()
     date = currentTime.strftime("%d/%m/%Y")
     hour = currentTime.strftime("%H:%M:%S")
+    # Connect to database to store topics
+    from scripts import connectdb
+    collection = await connectdb("Memory")
+    chat_data = await collection.find_one({"_id":wa_id}) or None # chat_data should be a dict
+    if chat_data:
+        chat_data = chat_data['memory']
+
     try:
         result = await AIClient.chat.completions.create(
             model="gpt-3.5-turbo",
             temperature=1.2,
             messages=[
             {"role":'system', 'content':ROLE + f" You are currently chatting with {user_name}."},
-            {"role":'assistant', 'content':f"The current date is {date} at {hour} UTC+8"},
+            {"role":'assistant', 'content':f"The current date is {date} at {hour} UTC+8. Chat data with the user: {chat_data}"},
             {"role": "user", "content": response}
             ]
         )
-        return result.choices[0].message.content
+        AI_response = result.choices[0].message.content
+        await summarize(chat_data, collection, user_name, wa_id, AI_response, response)
+        return AI_response
     
     except openai.RateLimitError:
         return f"Waaaaah! Otakku sedang kepanasan!\nTolong berikan aku waktu istirahat sejenak, ya!"
@@ -254,7 +290,7 @@ async def process_whatsapp_message(body):
                 message_body = None
 
     # Create a response accordingly!
-    response = await generate_response(message_body, name, image_path)
+    response = await generate_response(message_body, name, image_path, wa_id)
 
     with suppress(): # Doesn't seem to work, I used try-except blocks instead
         command = check_command(message_body)
