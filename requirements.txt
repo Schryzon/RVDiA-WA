@@ -9,3 +9,5 @@ aiofiles
 pillow
 pymongo
 motor
+google-generativeai
+pytz

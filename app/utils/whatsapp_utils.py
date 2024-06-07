@@ -1,8 +1,8 @@
 import logging
 from quart import current_app, jsonify
 import json
-import openai
-from openai import AsyncOpenAI
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+import google.generativeai as genai
 import os
 from datetime import datetime
 from dotenv import load_dotenv
@@ -10,17 +10,13 @@ from .command_handler import check_command, prefixes, execute_command
 import aiohttp
 from .scripts import upload_media
 from contextlib import suppress
+import pathlib
 import mimetypes
+import pytz
+import asyncio
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-SECOND_AI_API_KEY = os.getenv("SECOND_AI_API_KEY")
-AIClient = AsyncOpenAI(
-        api_key=OPENAI_API_KEY
-    )
-AIClient2 = AsyncOpenAI(
-    api_key=SECOND_AI_API_KEY
-)
+
 # from app.services.openai_service import generate_response
 import re
 
@@ -42,7 +38,7 @@ image_commands = [
 ]
 
 def get_message_input(recipient, text, type, image_id = None, command_name = None):
-    if type == "text" and not command_name in image_commands:
+    if type == "text" or type == "image" and not command_name in image_commands:
         return json.dumps(
             {
                 "messaging_product": "whatsapp",
@@ -66,18 +62,20 @@ def get_message_input(recipient, text, type, image_id = None, command_name = Non
     
 
 async def summarize(chat_data, collection, user_name, wa_id, AI_response, response):
+    from scripts import google_safety_settings
     SUMMARIZER_ROLE = os.getenv("SUMMARIZER_ROLE")
     SUMMARIZER_ASSIST = os.getenv("SUMMARIZER_ASSIST")
-    summarize = await AIClient.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature=0, # Ensuring no dupes, or something?
-        messages=[
-        {"role":'system', 'content':SUMMARIZER_ROLE},
-        {"role":'assistant', 'content':SUMMARIZER_ASSIST},
-        {"role": "user", "content": f"{user_name}: {response}\nRVDiA: {AI_response}"}
-        ]
+    genai.configure(api_key=os.getenv("SUMMARIZER_KEY"))
+    model2 = genai.GenerativeModel(
+        'gemini-1.5-flash',
+        system_instruction=SUMMARIZER_ROLE + SUMMARIZER_ASSIST,
+        safety_settings=google_safety_settings
     )
-    summarize_response = json.loads(summarize.choices[0].message.content)
+
+    summarize = await model2.generate_content_async(
+        f"{user_name}: {response}\nRVDiA: {AI_response}"
+    )
+    summarize_response = json.loads(summarize.text)
     
     if not chat_data:
         await collection.insert_one({"_id":wa_id, "memory":[summarize_response]})
@@ -86,14 +84,44 @@ async def summarize(chat_data, collection, user_name, wa_id, AI_response, respon
 
 
 async def generate_response(response, user_name, image_path, wa_id):
-    # TODO: Add saving threads and learning from chats.
     """
     Generate a response to the user
     If a command prefix is detected, it runs a command
     Else, it will initiate a convo with the AI
     """
-    if response is None and image_path:
-        return "Itu gambar apa yah?\nMohon maaf, aku masih belum bisa menganalisis foto secara langsung! >_<"
+    from scripts import connectdb, google_safety_settings
+    collection = await connectdb("Memory")
+    chat_data = await collection.find_one({"_id":wa_id}) or None # chat_data should be a dict
+    if chat_data:
+        chat_data = chat_data['memory']
+
+    ROLE = os.getenv("rolesys")
+    currentTime = datetime.now(pytz.utc).astimezone(pytz.timezone("Asia/Jakarta")) # Configure to UTC+7
+    date = currentTime.strftime("%d/%m/%Y")
+    hour = currentTime.strftime("%H:%M:%S")
+
+    # Image-based
+    if image_path:
+        prompt = response or "Apa yang ada di gambar ini?"
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        model = genai.GenerativeModel(
+            'gemini-1.5-flash',
+            system_instruction=ROLE + f"Currently chatting with {user_name}" + f"The current date is {date} at {hour} UTC+7. Chat data with user: {chat_data}",
+            safety_settings=google_safety_settings
+            )
+
+        picture_data = {
+            'mime_type': 'image/jpg',
+            'data': pathlib.Path(image_path).read_bytes()
+        }
+
+        request = await model.generate_content_async(
+            contents=[prompt, picture_data]
+        )
+        AI_response = request.text
+        await summarize(chat_data, collection, user_name, wa_id, AI_response, response)
+        return AI_response
+
     command = check_command(response)
     if command:
         args = command[1][2]
@@ -106,39 +134,38 @@ async def generate_response(response, user_name, image_path, wa_id):
             return f"Wow! Command ini mengalami error!\nDetail error: {e}\nTolong laporkan ke Jayananda segera, ya!"
         # return f"Command detected! {command[0], command[1][0], command[1][1], command[1][2]}"
 
-    ROLE = os.getenv("rolesys")
-    currentTime = datetime.now()
-    date = currentTime.strftime("%d/%m/%Y")
-    hour = currentTime.strftime("%H:%M:%S")
     # Connect to database to store topics
-    from scripts import connectdb
-    collection = await connectdb("Memory")
-    chat_data = await collection.find_one({"_id":wa_id}) or None # chat_data should be a dict
-    if chat_data:
-        chat_data = chat_data['memory']
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    model1 = genai.GenerativeModel(
+        'gemini-1.5-flash',
+        system_instruction=ROLE + f"Currently chatting with {user_name}" + f"The current date is {date} at {hour} UTC+7. Chat data with the user: {chat_data}",
+        safety_settings=google_safety_settings
+    )
 
     try:
-        result = await AIClient.chat.completions.create(
-            model="gpt-3.5-turbo",
-            temperature=1.2,
-            messages=[
-            {"role":'system', 'content':ROLE + f" You are currently chatting with {user_name}."},
-            {"role":'assistant', 'content':f"The current date is {date} at {hour} UTC+8. Chat data with the user: {chat_data}"},
-            {"role": "user", "content": response}
-            ]
+        result = await model1.generate_content_async(
+            response
         )
-        AI_response = result.choices[0].message.content
+        AI_response = result.text
         await summarize(chat_data, collection, user_name, wa_id, AI_response, response)
         return AI_response
     
-    except openai.RateLimitError:
-        return f"Waaaaah! Otakku sedang kepanasan!\nTolong berikan aku waktu istirahat sejenak, ya!"
-    except openai.APITimeoutError:
-        return f"Hmmm...\nKoneksiku ke server sedang ada kendala. Coba hubungi Jayananda, ya!"
-    except openai.APIConnectionError:
-        return f"E-ehh... uhm... sepertinya ada kendala saat aku menghubungkan diri ke server."
-    except openai.InternalServerError:
-        return f"Mohon maaf, fungsi untuk membalas chatmu sedang dalam gangguan.\nCoba lagi nanti, ya!"
+    # Handling 500 errors, it happens a lot.
+    except Exception as e:
+        if "500" in str(e):
+            retries = 0
+            delay = 1
+            max_retries = 5
+            while retries <= max_retries:
+                retries += 1
+                try:
+                    return await generate_response(response, user_name, image_path, wa_id)
+
+                except:
+                    await asyncio.sleep(delay)
+                    
+        logging.warning(f"Caught an exception: {e}")
+        return "Maaf sayang, fitur chat sedang dalam gangguan!\nCoba hubungi Jayananda, ya. Aku sudah ngasih dia catatan eror ini!"
 
 
 async def send_message(data):
@@ -181,6 +208,10 @@ def process_text_for_whatsapp(text):
 
     return whatsapp_style_text
 
+# Blacklisted paths
+dont_delete:list = [
+    "./saved_items/images/qmark.png"
+]
 
 async def process_whatsapp_message(body):
     """
@@ -292,20 +323,20 @@ async def process_whatsapp_message(body):
     # Create a response accordingly!
     response = await generate_response(message_body, name, image_path, wa_id)
 
-    with suppress(): # Doesn't seem to work, I used try-except blocks instead
+    # Check if an image command or type was executed
+    try:
         command = check_command(message_body)
-        try:
-            command_name = command[1][1]
-            if message_type == 'image' or command_name in image_commands:
-                print(f"Response: {response}")
-                media_data = await upload_media(response[1])
-                data = get_message_input(wa_id, response[0], message_type, image_id=media_data, command_name=command_name)
-                if not response[1] == "./saved_items/images/qmark.png": # It literally got deleted during debugging
-                    os.remove(response[1])
-            else:    
-                data = get_message_input(wa_id, response, message_type)
-        except:
+        command_name = command[1][1]
+        if message_type == 'image' or command_name in image_commands:
+            print(f"Response: {response}")
+            media_data = await upload_media(response[1])
+            data = get_message_input(wa_id, response[0], message_type, image_id=media_data, command_name=command_name)
+            if not response[1] in dont_delete: # It literally got deleted during debugging
+                os.remove(response[1])
+        else:    
             data = get_message_input(wa_id, response, message_type)
+    except:
+        data = get_message_input(wa_id, response, message_type)
 
     # OpenAI Integration
     # response = generate_response(message_body, wa_id, name)
