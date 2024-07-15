@@ -6,7 +6,7 @@ Contributions are welcome.
 Licensed under the MIT LICENSE.
 Made with Quart, an async version of Flask.
 
-UNRAM, please accept me!!! >_<
+UNRAM accepted me, dawg!
 """
 
 import logging

@@ -14,11 +14,12 @@ import pathlib
 import mimetypes
 import pytz
 import asyncio
+import traceback
+import re
 load_dotenv()
 
 
 # from app.services.openai_service import generate_response
-import re
 
 """
 #UbahKeAsync
@@ -131,6 +132,7 @@ async def generate_response(response, user_name, image_path, wa_id):
                 return await execute_command(name, wa_id)
             return await execute_command(command[1][1], *command[1][2]) if args else await execute_command(command[1][1])
         except Exception as e:
+            logging.error(f"{traceback.print_exc()}")
             return f"Wow! Command ini mengalami error!\nDetail error: {e}\nTolong laporkan ke Jayananda segera, ya!"
         # return f"Command detected! {command[0], command[1][0], command[1][1], command[1][2]}"
 
@@ -152,7 +154,7 @@ async def generate_response(response, user_name, image_path, wa_id):
     
     # Handling 500 errors, it happens a lot.
     except Exception as e:
-        if "500" in str(e):
+        if "500" in str(e) or "503" in str(e):
             retries = 0
             delay = 1
             max_retries = 5
