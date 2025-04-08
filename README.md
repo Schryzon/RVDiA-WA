@@ -40,4 +40,7 @@ This project uses a template from [This repository.](https://github.com/daveebbe
 Credits to [Dave Ebbelaar](https://github.com/daveebbelaar). Thank you for the guide!
 
 Thank you to those who supported me in creating the first RVDiA, your kind words have brought me to this point...
-There's no way I'm stopping now!
+
+`End of Life: 08/04/2025` (Down due to VPS destruction to save money)
+
+I'll make sure to come back sometime!

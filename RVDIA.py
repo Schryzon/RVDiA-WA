@@ -17,5 +17,5 @@ app = create_app()
 
 if __name__ == "__main__":
     logging.info("RVDiA, booted up. Initiating ASYNC mode.")
-    #app.run(host="0.0.0.0", port=8000)
+    #app.run(host="0.0.0.0", port=8000) # For production
     app.run(host="0.0.0.0", port=8000, debug = True)
